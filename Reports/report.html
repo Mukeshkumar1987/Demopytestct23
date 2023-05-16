@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>report.html</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    let visibleString = getQueryParameter('visible') || 'all';
+    visibleString = visibleString.toLowerCase();
+    const checkedItems = visibleString.split(',');
+
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++) {
+        filterItems[i].hidden = false;
+
+        if (visibleString != 'all') {
+            filterItems[i].checked = checkedItems.includes(filterItems[i].getAttribute('data-test-result'));
+            filterTable(filterItems[i]);
+        }
+    }
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>report.html</h1>
+    <p>Report generated on 15-May-2023 at 12:26:56 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.2.0</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>BUILD_ID</td>
+        <td>1</td></tr>
+      <tr>
+        <td>BUILD_NUMBER</td>
+        <td>1</td></tr>
+      <tr>
+        <td>BUILD_TAG</td>
+        <td>jenkins-newornage-1</td></tr>
+      <tr>
+        <td>BUILD_URL</td>
+        <td><a href="http://localhost:9090/job/newornage/1/" target="_blank">http://localhost:9090/job/newornage/1/</a></td></tr>
+      <tr>
+        <td>CI</td>
+        <td>true</td></tr>
+      <tr>
+        <td>EXECUTOR_NUMBER</td>
+        <td>0</td></tr>
+      <tr>
+        <td>Environment</td>
+        <td>Test</td></tr>
+      <tr>
+        <td>JENKINS_URL</td>
+        <td><a href="http://localhost:9090/" target="_blank">http://localhost:9090/</a></td></tr>
+      <tr>
+        <td>JOB_NAME</td>
+        <td>newornage</td></tr>
+      <tr>
+        <td>Module Name</td>
+        <td>Employee</td></tr>
+      <tr>
+        <td>NODE_NAME</td>
+        <td>built-in</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.22621-SP0</td></tr>
+      <tr>
+        <td>Project Name</td>
+        <td>OrangHRM</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.10.7</td></tr>
+      <tr>
+        <td>Tester</td>
+        <td>Credence</td></tr>
+      <tr>
+        <td>WORKSPACE</td>
+        <td>C:\Users\mukes\PycharmProjects\pythonpytest</td></tr></table>
+    <h2>Summary</h2>
+    <p>16 tests ran in 212.85 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">13 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">3 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">testcases/test_addemp.py::Test_Add_Emp::test_addEmp_003</td>
+          <td class="col-duration">31.58</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw3] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/>[gw3] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw3] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/><br/>self = &lt;testcases.test_addemp.Test_Add_Emp object at 0x00000246DA386170&gt;<br/>setup = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;befdd2a2-a893-4582-ae85-2361e242a4f7&quot;)&gt;<br/><br/>    def test_addEmp_003(self,setup):<br/>        self.log.info(&quot;test_addEmp_003 is started&quot;)<br/>        self.driver = setup<br/>        self.log.info(&quot;Opening Browser&quot;)<br/>        self.driver.get(self.Url)<br/>        self.log.info(&quot;Going to Url--&gt;&quot; + self.Url)<br/>        self.lp = loginpage(self.driver)<br/>        self.lp.Enter_UserName(self.username)<br/>        self.log.info(&quot;Entering UserName--&gt;&quot; + self.username)<br/>        self.lp.Enter_Password(self.password)<br/>        self.log.info(&quot;Entering password--&gt;&quot; + self.password)<br/>        self.lp.Click_Login()<br/>        self.log.info(&quot;Click On login&quot;)<br/>        self.ae = AddEmployee(self.driver)<br/>        self.ae.Click_PIM()<br/>        self.log.info(&quot;Click On PIM&quot;)<br/>        self.ae.Click_Add()<br/>        self.log.info(&quot;Click On Add&quot;)<br/>        self.ae.Enter_First_Name(&quot;Credense&quot;)<br/>        self.log.info(&quot;Entering FirstName&quot;)<br/>        self.ae.Enter_Middle_Name(&quot;IT&quot;)<br/>        self.log.info(&quot;Entering MiddleName&quot;)<br/>        self.ae.Enter_Last_Name(&quot;Pune&quot;)<br/>        self.log.info(&quot;Entering LastName&quot;)<br/>        time.sleep(2)<br/>&gt;       self.ae.Click_save()<br/><span class="error">E       AttributeError: &#x27;AddEmployee&#x27; object has no attribute &#x27;Click_save&#x27;. Did you mean: &#x27;Click_Save&#x27;?</span><br/><br/>testcases\test_addemp.py:41: AttributeError[gw3] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/> -----------------------------Captured stdout setup------------------------------ <br/>Headless mode
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_Add_Emp:test_addemp.py:17 test_addEmp_003 is started
+INFO     Test_Add_Emp:test_addemp.py:19 Opening Browser
+INFO     Test_Add_Emp:test_addemp.py:21 Going to Url--&gt;https://opensource-demo.orangehrmlive.com/
+INFO     Test_Add_Emp:test_addemp.py:24 Entering UserName--&gt;Admin
+INFO     Test_Add_Emp:test_addemp.py:26 Entering password--&gt;admin123
+INFO     Test_Add_Emp:test_addemp.py:28 Click On login
+INFO     Test_Add_Emp:test_addemp.py:31 Click On PIM
+INFO     Test_Add_Emp:test_addemp.py:33 Click On Add
+INFO     Test_Add_Emp:test_addemp.py:35 Entering FirstName
+INFO     Test_Add_Emp:test_addemp.py:37 Entering MiddleName
+INFO     Test_Add_Emp:test_addemp.py:39 Entering LastName<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">testcases/test_addemp_ddt_005.py::Test_Add_Emp_DDT::test_addEmp_ddt_005</td>
+          <td class="col-duration">21.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/>[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/><br/>self = &lt;testcases.test_addemp_ddt_005.Test_Add_Emp_DDT object at 0x0000018453A06110&gt;<br/>setup = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;dce36fca-dbf0-4bc6-b4a0-41b4103acb44&quot;)&gt;<br/><br/>    def test_addEmp_ddt_005(self,setup):<br/>        self.log.info(&quot;test_addEmp_ddt_005 is started&quot;)<br/>        self.driver = setup<br/>        self.log.info(&quot;Opening Browser&quot;)<br/>        self.driver.get(self.Url)<br/>        self.log.info(&quot;Going to Url--&gt;&quot; + self.Url)<br/>        self.lp = loginpage(self.driver)<br/>        self.lp.Enter_UserName(self.username)<br/>        self.log.info(&quot;Entering UserName--&gt;&quot; + self.username)<br/>        self.lp.Enter_Password(self.password)<br/>        self.log.info(&quot;Entering password--&gt;&quot; + self.password)<br/>        self.lp.Click_Login()<br/>        self.log.info(&quot;Click On login&quot;)<br/>        self.ae = AddEmployee(self.driver)<br/>&gt;       self.rows = XLutils.getrowCount(self.Path, &#x27;Sheet1&#x27;)<br/><br/>testcases\test_addemp_ddt_005.py:33: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/>utilites\XLutils.py:5: in getrowCount<br/>    book = openpyxl.load_workbook(file)<br/>..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\openpyxl\reader\excel.py:344: in load_workbook<br/>    reader = ExcelReader(filename, read_only, keep_vba,<br/>..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\openpyxl\reader\excel.py:123: in __init__<br/>    self.archive = _validate_archive(fn)<br/>..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\openpyxl\reader\excel.py:95: in _validate_archive<br/>    archive = ZipFile(filename, &#x27;r&#x27;)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;zipfile.ZipFile [closed]&gt;<br/>file = &#x27;/testcase/TestData/Employee_Data.xlsx&#x27;, mode = &#x27;r&#x27;, compression = 0<br/>allowZip64 = True, compresslevel = None<br/><br/>    def __init__(self, file, mode=&quot;r&quot;, compression=ZIP_STORED, allowZip64=True,<br/>                 compresslevel=None, *, strict_timestamps=True):<br/>        &quot;&quot;&quot;Open the ZIP file with mode read &#x27;r&#x27;, write &#x27;w&#x27;, exclusive create &#x27;x&#x27;,<br/>        or append &#x27;a&#x27;.&quot;&quot;&quot;<br/>        if mode not in (&#x27;r&#x27;, &#x27;w&#x27;, &#x27;x&#x27;, &#x27;a&#x27;):<br/>            raise ValueError(&quot;ZipFile requires mode &#x27;r&#x27;, &#x27;w&#x27;, &#x27;x&#x27;, or &#x27;a&#x27;&quot;)<br/>    <br/>        _check_compression(compression)<br/>    <br/>        self._allowZip64 = allowZip64<br/>        self._didModify = False<br/>        self.debug = 0  # Level of printing: 0 through 3<br/>        self.NameToInfo = {}    # Find file info given name<br/>        self.filelist = []      # List of ZipInfo instances for archive<br/>        self.compression = compression  # Method of compression<br/>        self.compresslevel = compresslevel<br/>        self.mode = mode<br/>        self.pwd = None<br/>        self._comment = b&#x27;&#x27;<br/>        self._strict_timestamps = strict_timestamps<br/>    <br/>        # Check if we were passed a file-like object<br/>        if isinstance(file, os.PathLike):<br/>            file = os.fspath(file)<br/>        if isinstance(file, str):<br/>            # No, it&#x27;s a filename<br/>            self._filePassed = 0<br/>            self.filename = file<br/>            modeDict = {&#x27;r&#x27; : &#x27;rb&#x27;, &#x27;w&#x27;: &#x27;w+b&#x27;, &#x27;x&#x27;: &#x27;x+b&#x27;, &#x27;a&#x27; : &#x27;r+b&#x27;,<br/>                        &#x27;r+b&#x27;: &#x27;w+b&#x27;, &#x27;w+b&#x27;: &#x27;wb&#x27;, &#x27;x+b&#x27;: &#x27;xb&#x27;}<br/>            filemode = modeDict[mode]<br/>            while True:<br/>                try:<br/>&gt;                   self.fp = io.open(file, filemode)<br/><span class="error">E                   FileNotFoundError: [Errno 2] No such file or directory: &#x27;/testcase/TestData/Employee_Data.xlsx&#x27;</span><br/><br/>..\..\AppData\Local\Programs\Python\Python310\lib\zipfile.py:1249: FileNotFoundError[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/> -----------------------------Captured stdout setup------------------------------ <br/>Headless mode
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_Add_Emp_DDT:test_addemp_ddt_005.py:20 test_addEmp_ddt_005 is started
+INFO     Test_Add_Emp_DDT:test_addemp_ddt_005.py:22 Opening Browser
+INFO     Test_Add_Emp_DDT:test_addemp_ddt_005.py:24 Going to Url--&gt;https://opensource-demo.orangehrmlive.com/
+INFO     Test_Add_Emp_DDT:test_addemp_ddt_005.py:27 Entering UserName--&gt;Admin
+INFO     Test_Add_Emp_DDT:test_addemp_ddt_005.py:29 Entering password--&gt;admin123
+INFO     Test_Add_Emp_DDT:test_addemp_ddt_005.py:31 Click On login<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">testcases/test_empsearch.py::Test_Search_Emp::test_searchEmp_005</td>
+          <td class="col-duration">27.19</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw3] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/>[gw3] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw3] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/><br/>self = &lt;testcases.test_empsearch.Test_Search_Emp object at 0x00000246DC18B730&gt;<br/>setup = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;74ccb186-f248-4dfb-9795-07bceb44fc4c&quot;)&gt;<br/><br/>    def test_searchEmp_005(self, setup):<br/>        self.log.info(&quot;test_searchEmp_005 is started&quot;)<br/>        self.driver = setup<br/>        self.log.info(&quot;Opening Browser&quot;)<br/>        self.driver.get(self.Url)<br/>        self.log.info(&quot;Going to Url--&gt;&quot; + self.Url)<br/>        self.lp = loginpage(self.driver)<br/>        self.lp.Enter_UserName(self.username)<br/>        self.log.info(&quot;Entering UserName--&gt;&quot; + self.username)<br/>        self.lp.Enter_Password(self.password)<br/>        self.log.info(&quot;Entering password--&gt;&quot; + self.password)<br/>        self.lp.Click_Login()<br/>        self.log.info(&quot;Click On login&quot;)<br/>        self.ae = AddEmployee(self.driver)<br/>        self.ae.Click_PIM()<br/>        self.log.info(&quot;Click On PIM&quot;)<br/>        self.es = EmployeeSearch(self.driver)<br/>        self.es.Enter_EmpName(&quot;David&quot;)<br/>        self.log.info(&quot;Entering Emp Name&quot;)<br/>        # time.sleep(2)<br/>        self.es.Click_SearchButton()<br/>        self.log.info(&quot;Clicking on search Button&quot;)<br/>        time.sleep(1)<br/>    <br/>        print(self.es.Search_Result())<br/>        if self.es.Search_Result() ==True:<br/>            self.log.info(&quot;Search Found&quot;)<br/>            self.log.info(&quot;test_searchEmp_005 is Passed&quot;)<br/>            self.lp.Click_MenuButton()<br/>            self.log.info(&quot;Click on MenuButton&quot;)<br/>            self.lp.Click_Logout()<br/>            self.log.info(&quot;Click on Logout Button&quot;)<br/>            assert True<br/>            self.log.info(&quot;test_searchEmp_005 is Passed&quot;)<br/>        else:<br/>            self.log.info(&quot;No Search Found&quot;)<br/>            self.lp.Click_MenuButton()<br/>            self.log.info(&quot;Click on MenuButton&quot;)<br/>            self.lp.Click_Logout()<br/>            self.log.info(&quot;Click on Logout Button&quot;)<br/>            self.log.info(&quot;test_searchEmp_005 is Failed&quot;)<br/>&gt;           assert False<br/><span class="error">E           assert False</span><br/><br/>testcases\test_empsearch.py:56: AssertionError[gw3] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/> -----------------------------Captured stdout setup------------------------------ <br/>Headless mode
+<br/> ------------------------------Captured stdout call------------------------------ <br/>Ajay David
+False
+Ajay David
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_Search_Emp:test_empsearch.py:16 test_searchEmp_005 is started
+INFO     Test_Search_Emp:test_empsearch.py:18 Opening Browser
+INFO     Test_Search_Emp:test_empsearch.py:20 Going to Url--&gt;https://opensource-demo.orangehrmlive.com/
+INFO     Test_Search_Emp:test_empsearch.py:23 Entering UserName--&gt;Admin
+INFO     Test_Search_Emp:test_empsearch.py:25 Entering password--&gt;admin123
+INFO     Test_Search_Emp:test_empsearch.py:27 Click On login
+INFO     Test_Search_Emp:test_empsearch.py:30 Click On PIM
+INFO     Test_Search_Emp:test_empsearch.py:33 Entering Emp Name
+INFO     Test_Search_Emp:test_empsearch.py:36 Clicking on search Button
+INFO     Test_Search_Emp:test_empsearch.py:50 No Search Found
+INFO     Test_Search_Emp:test_empsearch.py:52 Click on MenuButton
+INFO     Test_Search_Emp:test_empsearch.py:54 Click on Logout Button
+INFO     Test_Search_Emp:test_empsearch.py:55 test_searchEmp_005 is Failed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testcases/test_Login_ddt.py::Test_Login_DDT::test_login_ddt_006</td>
+          <td class="col-duration">78.62</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw0] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/>[gw0] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw0] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw0] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/> -----------------------------Captured stdout setup------------------------------ <br/>Headless mode
+<br/> ------------------------------Captured stdout call------------------------------ <br/>Number of rows are ---&gt; 5
+[&#x27;Pass&#x27;, &#x27;Fail&#x27;, &#x27;Fail&#x27;, &#x27;Fail&#x27;]
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_Login_DDT:test_Login_ddt.py:17 test_login_ddt_006 is started
+INFO     Test_Login_DDT:test_Login_ddt.py:18 Opening Browser
+INFO     Test_Login_DDT:test_Login_ddt.py:20 Go to this url--&gt;https://opensource-demo.orangehrmlive.com/
+INFO     Test_Login_DDT:test_Login_ddt.py:30 Entering username--&gt;Admin
+INFO     Test_Login_DDT:test_Login_ddt.py:32 Entering password--&gt;admin123
+INFO     Test_Login_DDT:test_Login_ddt.py:34 Click on login button
+INFO     Test_Login_DDT:test_Login_ddt.py:41 Click on Menu button
+INFO     Test_Login_DDT:test_Login_ddt.py:43 Click on logout button
+INFO     Test_Login_DDT:test_Login_ddt.py:30 Entering username--&gt;Admin1
+INFO     Test_Login_DDT:test_Login_ddt.py:32 Entering password--&gt;admin123
+INFO     Test_Login_DDT:test_Login_ddt.py:34 Click on login button
+INFO     Test_Login_DDT:test_Login_ddt.py:30 Entering username--&gt;Admin
+INFO     Test_Login_DDT:test_Login_ddt.py:32 Entering password--&gt;admin1231
+INFO     Test_Login_DDT:test_Login_ddt.py:34 Click on login button
+INFO     Test_Login_DDT:test_Login_ddt.py:30 Entering username--&gt;Admin1
+INFO     Test_Login_DDT:test_Login_ddt.py:32 Entering password--&gt;admin1231
+INFO     Test_Login_DDT:test_Login_ddt.py:34 Click on login button
+INFO     Test_Login_DDT:test_Login_ddt.py:60 test_login_ddt_006 is Failed
+INFO     Test_Login_DDT:test_Login_ddt.py:63 test_login_ddt_006 is Completed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testcases/test_Login_params.py::Test_Login_Params::test_login_params_004[getDataforlogin1]</td>
+          <td class="col-duration">48.39</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw2] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/>[gw2] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw2] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw2] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/> -----------------------------Captured stdout setup------------------------------ <br/>Headless mode
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_Login_Params:test_Login_params.py:18 test_logins_param_004 is started
+INFO     Test_Login_Params:test_Login_params.py:19 Opening Browser
+INFO     Test_Login_Params:test_Login_params.py:21 Go to this url--&gt;https://opensource-demo.orangehrmlive.com/
+INFO     Test_Login_Params:test_Login_params.py:25 Entering username--&gt;Admin1
+INFO     Test_Login_Params:test_Login_params.py:26 Entering username --&gt;Admin
+INFO     Test_Login_Params:test_Login_params.py:28 Entering password--&gt;admin123
+INFO     Test_Login_Params:test_Login_params.py:29 Entering password--&gt;admin123
+INFO     Test_Login_Params:test_Login_params.py:31 Click on login button
+INFO     Test_Login_Params:test_Login_params.py:56 test_login_002 is Completed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testcases/test_Login.py::Test_Login::test_Page_Title_001</td>
+          <td class="col-duration">37.88</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/>[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/> -----------------------------Captured stdout setup------------------------------ <br/>Headless mode
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_Login:test_Login.py:21 test_Page_Title_001 is started
+INFO     Test_Login:test_Login.py:22 Opening Browser
+INFO     Test_Login:test_Login.py:24 Go to this url--&gt;https://opensource-demo.orangehrmlive.com/
+INFO     Test_Login:test_Login.py:28 test_Page_Title_001 is Passed
+INFO     Test_Login:test_Login.py:29 Page Title is--&gt;OrangeHRM
+INFO     Test_Login:test_Login.py:34 test_Page_Title_001 is completed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testcases/test_Login_params.py::Test_Login_Params::test_login_params_004[getDataforlogin3]</td>
+          <td class="col-duration">47.89</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw3] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/>[gw3] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw3] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw3] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/> -----------------------------Captured stdout setup------------------------------ <br/>Headless mode
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_Login_Params:test_Login_params.py:18 test_logins_param_004 is started
+INFO     Test_Login_Params:test_Login_params.py:19 Opening Browser
+INFO     Test_Login_Params:test_Login_params.py:21 Go to this url--&gt;https://opensource-demo.orangehrmlive.com/
+INFO     Test_Login_Params:test_Login_params.py:25 Entering username--&gt;Admin1
+INFO     Test_Login_Params:test_Login_params.py:26 Entering username --&gt;Admin
+INFO     Test_Login_Params:test_Login_params.py:28 Entering password--&gt;admin1231
+INFO     Test_Login_Params:test_Login_params.py:29 Entering password--&gt;admin123
+INFO     Test_Login_Params:test_Login_params.py:31 Click on login button
+INFO     Test_Login_Params:test_Login_params.py:56 test_login_002 is Completed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testcases/test_Login.py::Test_Login::test_login_002</td>
+          <td class="col-duration">25.87</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/>[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/> -----------------------------Captured stdout setup------------------------------ <br/>Headless mode
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_Login:test_Login.py:40 test_login_002 is started
+INFO     Test_Login:test_Login.py:41 Opening Browser
+INFO     Test_Login:test_Login.py:43 Go to this url--&gt;https://opensource-demo.orangehrmlive.com/
+INFO     Test_Login:test_Login.py:47 Entering Username--&gt;Admin
+INFO     Test_Login:test_Login.py:49 Entering password--&gt;admin123
+INFO     Test_Login:test_Login.py:54 Click on Menu button
+INFO     Test_Login:test_Login.py:56 Click on logout button
+INFO     Test_Login:test_Login.py:57 test_login_002 is Passed
+INFO     Test_Login:test_Login.py:65 test_login_002 is Completed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testcases/test_Login_params.py::Test_Login_Params::test_login_params_004[getDataforlogin2]</td>
+          <td class="col-duration">49.18</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw2] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/>[gw2] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw2] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw2] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/> -----------------------------Captured stdout setup------------------------------ <br/>Headless mode
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_Login_Params:test_Login_params.py:18 test_logins_param_004 is started
+INFO     Test_Login_Params:test_Login_params.py:19 Opening Browser
+INFO     Test_Login_Params:test_Login_params.py:21 Go to this url--&gt;https://opensource-demo.orangehrmlive.com/
+INFO     Test_Login_Params:test_Login_params.py:25 Entering username--&gt;Admin
+INFO     Test_Login_Params:test_Login_params.py:26 Entering username --&gt;Admin
+INFO     Test_Login_Params:test_Login_params.py:28 Entering password--&gt;admin1231
+INFO     Test_Login_Params:test_Login_params.py:29 Entering password--&gt;admin123
+INFO     Test_Login_Params:test_Login_params.py:31 Click on login button
+INFO     Test_Login_Params:test_Login_params.py:56 test_login_002 is Completed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testcases/test_file3.py::Test_002::test_sum_005</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/>[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testcases/test_file5.py::Test_Py::test_mul_002</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/>[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/> ------------------------------Captured stdout call------------------------------ <br/>15
+test_mul_002 is Passed
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testcases/test_file5.py::Test_Py::test_Google</td>
+          <td class="col-duration">21.51</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/>[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw1] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/> ------------------------------Captured stdout call------------------------------ <br/>True
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testcases/test_Login_params.py::Test_Login_Params::test_login_params_004[getDataforlogin0]</td>
+          <td class="col-duration">124.70</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw0] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/>[gw0] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw0] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw0] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/> -----------------------------Captured stdout setup------------------------------ <br/>Headless mode
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_Login_Params:test_Login_params.py:18 test_logins_param_004 is started
+INFO     Test_Login_Params:test_Login_params.py:19 Opening Browser
+INFO     Test_Login_Params:test_Login_params.py:21 Go to this url--&gt;https://opensource-demo.orangehrmlive.com/
+INFO     Test_Login_Params:test_Login_params.py:25 Entering username--&gt;Admin
+INFO     Test_Login_Params:test_Login_params.py:26 Entering username --&gt;Admin
+INFO     Test_Login_Params:test_Login_params.py:28 Entering password--&gt;admin123
+INFO     Test_Login_Params:test_Login_params.py:29 Entering password--&gt;admin123
+INFO     Test_Login_Params:test_Login_params.py:31 Click on login button
+INFO     Test_Login_Params:test_Login_params.py:37 Click on Menu button
+INFO     Test_Login_Params:test_Login_params.py:39 Click on logout button
+INFO     Test_Login_Params:test_Login_params.py:40 test_login_002 is Passed
+INFO     Test_Login_Params:test_Login_params.py:56 test_login_002 is Completed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testcases/test_file2.py::Test_002::test_sum_004</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw2] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/>[gw2] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw2] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw2] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testcases/test_file5.py::Test_Py::test_sum_001</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw3] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/>[gw3] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw3] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw3] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/> ------------------------------Captured stdout call------------------------------ <br/>8
+test_sum_001 is Passed
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testcases/test_file4.py::Test_004::test_mul_006</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw0] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/>[gw0] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw0] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe[gw0] win32 -- Python 3.10.7 C:\Users\mukes\AppData\Local\Programs\Python\Python310\python.exe<br/></div></td></tr></tbody></table></body></html>
